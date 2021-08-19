@@ -1,0 +1,156 @@
+#!/bin/bash
+barra=$( echo -e "\e[0;36m======================================================\e[m" ) #55
+DIR="/home/VPS-ARG"
+
+function espacio(){
+fila=$1
+col=$(( ( 55 - $2 )/2 ))
+tput cup $fila $col
+return
+}
+
+function titulo(){
+clear
+nl=$( echo -n "$1" | wc -m )
+echo "$barra"
+espacio 1 $nl
+echo "$1"
+echo "$barra"
+return
+}
+
+function aviso2(){
+echo "$barra"
+tput civis
+read -e -p "Enter para continuar" enter
+tput cnorm
+return
+}
+
+function mportas () {
+unset portas
+portas_var=$(lsof -V -i tcp -P -n | grep -v "ESTABLISHED" |grep -v "COMMAND" | grep "LISTEN")
+while read port; do
+var1=$(echo $port | awk '{print $1}') && var2=$(echo $port | awk '{print $9}' | awk -F ":" '{print $2}')
+[[ "$(echo -e $portas|grep "$var1 $var2")" ]] || portas+="$var1 $var2\n"
+done <<< "$portas_var"
+i=1
+echo -e "$portas"
+}
+
+function ssl_stunel () {
+tput cuu1 && tput dl1
+[[ $( mportas | grep stunnel4 | head -1) ]] && {
+echo -e "Parando Stunnel.."
+apt-get purge stunnel4 -y &> /dev/null
+cat $DIR/controles | grep -vw "ssl|1" > $DIR/controles
+echo -e "\nOK - Stunnel parado"
+aviso2
+return
+}
+
+titulo "Instalador SSL"
+echo -e "Seleccione una puerta de redirección interna."
+echo -e "Es decir, un puerto en su servidor para SSL"
+echo "$barra"
+         while true; do
+         read -e -p "Local-Port: " portx
+         if [[ ! -z $portx ]]; then
+             if [[ $( echo $portx | grep [0-9]) ]]; then
+                [[ $( mportas | grep $portx | head -1) ]] && break || echo -e "Puerta invalida" && tput cup 6 0
+             fi
+         fi
+         done
+echo "$barra"
+DPORT="$( mportas | grep $portx | awk '{print $2}' | head -1 )"
+echo -e "Indique el puerto de escucha SSL"
+echo "$barra"
+    while true; do
+    read -e -p "Listen-SSL: " SSLPORT
+    [[ $( mportas | grep -w "$SSLPORT" ) ]] || break
+    echo -e " Fail - Esta puerta está en uso" && tput cup 10 0
+    unset SSLPORT
+    done
+echo "$barra"
+echo -e "Instalando SSL.."
+apt-get install stunnel4 -y &> /dev/null
+echo -e "client = no\n[SSL]\ncert = /etc/stunnel/stunnel.pem\naccept = ${SSLPORT}\nconnect = 127.0.0.1:${DPORT}" > /etc/stunnel/stunnel.conf
+####Coreccion2.0##### 
+openssl genrsa -out stunnel.key 2048 > /dev/null 2>&1
+
+(echo "mx" ; echo "mx" ; echo "mx" ; echo "mx" ; echo "mx" ; echo "mx" ; echo "@vpsmx" )|openssl req -new -key stunnel.key -x509 -days 1000 -out stunnel.crt > /dev/null 2>&1
+
+cat stunnel.crt stunnel.key > stunnel.pem 
+
+mv stunnel.pem /etc/stunnel/
+######-------
+sed -i 's/ENABLED=0/ENABLED=1/g' /etc/default/stunnel4
+service stunnel4 restart > /dev/null 2>&1
+echo "ssl|1" >> $DIR/controles
+echo -e "\nOK - Instalado"
+rm -rf /etc/ger-frm/stunnel.crt > /dev/null 2>&1
+rm -rf /etc/ger-frm/stunnel.key > /dev/null 2>&1
+rm -rf /root/stunnel.crt > /dev/null 2>&1
+rm -rf /root/stunnel.key > /dev/null 2>&1
+aviso2
+return
+}
+
+function ssl_stunel_2 () {
+titulo "Instalador SSL"
+echo -e "Seleccione una puerta de redirección interna."
+echo -e "Es decir, un puerto en su servidor para SSL"
+echo -e "$barra"
+         while true; do
+         read -e -p "Local-Port: " portx
+         if [[ ! -z $portx ]]; then
+             if [[ $( echo $portx | grep [0-9]) ]]; then
+                [[ $( mportas | grep $portx | head -1 ) ]] && break || echo -e "Fail - Puerta invalida" && tput cup 6 0
+             fi
+         fi
+         done
+echo -e "$barra"
+DPORT="$( mportas | grep $portx | awk '{print $2}' | head -1 )"
+echo -e "Indique el puerto de escucha SSL"
+echo -e "$barra"
+    while true; do
+    read -e -p "Listen-SSL: " SSLPORT
+    [[ $( mportas | grep -w "$SSLPORT" ) ]] || break
+    echo -e "Fail - Esta puerta está en uso" && tput cup 10 0
+    unset SSLPORT
+    done
+echo -e "$barra"
+echo -e "Instalando SSL.."
+apt-get install stunnel4 -y $> /dev/null
+echo -e "client = no\n[SSL+]\ncert = /etc/stunnel/stunnel.pem\naccept = ${SSLPORT}\nconnect = 127.0.0.1:${DPORT}" >> /etc/stunnel/stunnel.conf
+######-------
+sed -i 's/ENABLED=0/ENABLED=1/g' /etc/default/stunnel4
+service stunnel4 restart > /dev/null 2>&1
+echo "ssl|1" >> $DIR/controles
+echo -e "\nOK - Instalado con exito"
+rm -rf /etc/ger-frm/stunnel.crt > /dev/null 2>&1
+rm -rf /etc/ger-frm/stunnel.key > /dev/null 2>&1
+rm -rf /root/stunnel.crt > /dev/null 2>&1
+rm -rf /root/stunnel.key > /dev/null 2>&1
+aviso2
+return
+}
+
+clear
+titulo "Instalador SSL"
+echo "[1] -> Iniciar o parar SSL"
+echo "[2] -> Agregar puerto SSL"
+echo "$barra"
+echo "[0] -> Volver"
+echo "$barra"
+read -e -p "Opcion: " opcao
+case $opcao in
+1)
+ssl_stunel
+exit;;
+2)
+ssl_stunel_2
+exit;;
+0)
+exit;;
+esac

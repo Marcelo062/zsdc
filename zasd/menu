@@ -1,0 +1,85 @@
+#!/bin/bash
+barra=$( echo -e "\e[0;36m======================================================\e[m" ) #55
+#Direcciones
+DIR="/home/VPS-ARG"
+DIR2="/usr/local/etc/VPS-ARG/"
+ini_auto="${DIR}/.ini_auto"
+aux="${DIR}/.aux"
+aux2="${DIR}/.aux2"
+#Valores
+cel="\e[0;36m"
+ama="\e[1;33m"
+roj="\e[0;31m"
+ver="\e[0;32m"
+fin="\e[m"
+
+function espacio(){
+fila=$1
+col=$(( ( 55 - $2 )/2 ))
+tput cup $fila $col
+return
+}
+
+function titulo(){
+clear
+nl=$( echo -n "$1" | wc -m )
+echo "$barra"
+espacio 1 $nl
+echo -e "${ama}$1${fin}"
+echo "$barra"
+return
+}
+
+#Preparativos para el script
+mkdir $DIR &> /dev/null
+
+if [[ -z $( cat $ini_auto ) ]]; then
+echo "OFF" > $ini_auto
+fi
+
+if [[  -f $DIR/controles ]]; then
+titulo "VPS-ARG - Instalador"
+tput civis
+echo -e "${ama}Instalando componentes.."
+{
+#apt-get update -y
+#apt-get upgrade -y
+#apt-get install bc -y
+#apt-get install screen -y
+#apt-get install nano -y
+#curl -s https://install.speedtest.net/app/cli/install.deb.sh | sudo bash
+#sudo apt-get install speedtest -y
+#apt-get -y --purge remove samba*;
+#apt-get -y --purge remove apache2*;
+#apt-get -y --purge remove bind9*;
+sleep 3
+} &> /dev/null
+tput cuu1 & tput dl1
+echo -e "${ver}OK ${fin}- ${ama}Componentes instalados"
+echo -e "${cel}----------------------------"
+echo -e "${ama}Creando comando.."
+{
+#echo "cd ${DIR2}" > /usr/bin/vps
+#echo "sudo ./s" >> /usr/bin/vps
+#chmod +x /usr/bin/vps
+sleep 3
+} &> /dev/null
+tput cuu1 & tput dl1
+echo -e "${ver}OK ${fin}- ${ama}Comando creado"
+echo -e "${cel}----------------------------"
+echo -e "${ama}Instalando ficheros"
+{
+sleep 3
+} &> /dev/null
+tput cuu1 & tput dl1
+echo -e "${ver}OK ${fin}- ${ama}Ficheros instalados"
+echo "componentes|1" > $DIR/controles
+echo -e "$barra"
+echo -e "${ama}Instalacion completa${fin}"
+sleep 3
+tput cnorm
+fi
+#Fin PPS
+
+cd ${DIR2}
+sudo ./s

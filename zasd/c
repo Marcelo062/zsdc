@@ -1,0 +1,154 @@
+#!/bin/bash
+barra=$( echo -e "\e[0;36m======================================================\e[m" ) #55
+#Direcciones
+DIR="/home/VPS-ARG"
+DIR2="/usr/local/etc/VPS-ARG/"
+MENU="/etc/VPS-ARG/menu"
+ini_auto="${DIR}/.ini_auto"
+aux="${DIR}/.aux"
+aux2="${DIR}/.aux2"
+#Valores
+
+function espacio(){
+fila=$1
+col=$(( ( 55 - $2 )/2 ))
+tput cup $fila $col
+return
+}
+
+function titulo(){
+clear
+nl=$( echo -n "$1" | wc -m )
+echo "$barra"
+espacio 1 $nl
+echo "$1"
+echo "$barra"
+return
+}
+
+function aviso(){
+tput cuu1
+tput civis
+read -e -p "[!] $1" enter
+tput cnorm
+return
+}
+
+function aviso2(){
+echo "$barra"
+tput civis
+read -e -p "Enter para continuar" enter
+tput cnorm
+return
+}
+
+function verif(){
+buscar=$1
+op=$2
+#cond=$( grep -w $buscar $DIR/controles )
+if [[ $op -eq 1 ]]; then
+cond=$( netstat -putona | grep -w $buscar )
+else
+cond=$( netstat -putona | grep "LISTEN" | grep -w $buscar )
+fi
+if [[ ! -z $cond ]]; then
+est="ON"
+else
+est="OFF"
+fi
+return
+}
+
+function fun_eth () {
+eth=$(ifconfig | grep -v inet6 | grep -v lo | grep -v 127.0.0.1 | grep "encap:Ethernet" | awk '{print $1}')
+    [[ $eth != "" ]] && {
+    msg -bar
+    msg -ama " $(fun_trans "Aplicar el sistema para mejorar los paquetes SSH?")"
+    msg -ama " $(fun_trans "Opciones para usuarios avanzados")"
+    msg -bar
+    read -p " [S/N]: " -e -i n sshsn
+           [[ "$sshsn" = @(s|S|y|Y) ]] && {
+           echo -e "${cor[1]} $(fun_trans "Correccion de problemas de paquetes en SSH ...")"
+           echo -e " $(fun_trans "¿Cual es la tasa RX?")"
+           echo -ne "[ 1 - 999999999 ]: "; read rx
+           [[ "$rx" = "" ]] && rx="999999999"
+           echo -e " $(fun_trans "¿Cual es la tasa TX?")"
+           echo -ne "[ 1 - 999999999 ]: "; read tx
+           [[ "$tx" = "" ]] && tx="999999999"
+           apt-get install ethtool -y > /dev/null 2>&1
+           ethtool -G $eth rx $rx tx $tx > /dev/null 2>&1
+           }
+     msg -bar
+	}
+}
+
+function fun_bar () {
+comando="$1"
+ _=$(
+$comando > /dev/null 2>&1
+) & > /dev/null
+pid=$!
+while [[ -d /proc/$pid ]]; do
+echo -ne "["
+   for((i=0; i<10; i++)); do
+   echo -ne "##"
+   sleep 0.2
+   done
+echo -ne "]"
+sleep 1s
+echo
+tput cuu1
+tput dl1
+done
+echo -e " ####################] - 100%"
+sleep 1s
+}
+
+function conexiones(){
+titulo "Conexiones"
+verif "badvpn" 1
+echo "[1] -> BadVPN [$est]"
+verif "dropbear" 2
+echo "[2] -> Dropbear [$est]"
+verif "python"
+echo "[3] -> Socks Python [$est]"
+verif "ssl"
+echo "[4] -> SSL [$est]"
+echo "$barra"
+echo "[0] -> Volver"
+echo "$barra"
+read -e -p "Opcion: " op
+case $op in
+1)
+cd ${DIR2}
+sudo ./badvpn
+;;
+2)
+cd ${DIR2}
+sudo ./dropbear
+;;
+3)
+export -f fun_eth
+export -f fun_bar
+cd ${DIR2}
+sudo ./sockspy
+;;
+4)
+cd ${DIR2}
+sudo ./ssl
+;;
+0)
+exit
+;;
+*)
+aviso "Opcion invalida"
+;;
+esac
+return
+}
+
+
+while :
+do
+conexiones
+done

@@ -1,0 +1,144 @@
+#!/bin/bash
+barra=$( echo -e "\e[0;36m======================================================\e[m" ) #55
+#Direcciones
+DIR="/home/VPS-ARG"
+aux="${DIR}/.aux"
+aux2="${DIR}/.aux2"
+#Valores
+
+function espacio(){
+fila=$1
+col=$(( ( 55 - $2 )/2 ))
+tput cup $fila $col
+return
+}
+
+function titulo(){
+clear
+nl=$( echo -n "$1" | wc -m )
+echo "$barra"
+espacio 1 $nl
+echo "$1"
+echo "$barra"
+return
+}
+
+function aviso(){
+tput cuu1
+tput civis
+read -e -p "[!] $1" enter
+tput cnorm
+return
+}
+
+function aviso2(){
+echo "$barra"
+tput civis
+read -e -p "Enter para continuar" enter
+tput cnorm
+return
+}
+
+function verif(){
+puertos=$( lsof -i -P -n | grep LISTEN | awk -F ":" '{print $2}' | awk -F " " '{print $1}' )
+for p in ${puertos[@]}
+do
+lsof -i -P -n | grep LISTEN | grep $p | awk -F " " '{print $1}' > $aux
+nombre=$( head -n 1 $aux )
+	if [[ $nombre == "dropbear" ]]; then
+	drop="On"
+	break
+	else
+	drop="Off"
+	fi
+done
+echo "$puertos" > $aux2
+return
+}
+
+function aviso_p(){
+echo -e "Puerto: $1"
+return
+}
+
+function verif2(){
+puertos=$1
+puertos="$puertos $2"
+puertos="$puertos $3"
+puertos="$puertos $4"
+disp=0
+for p in ${puertos[@]}
+do
+busq=$( grep $p $aux2 )
+	if [[ -z $busq ]]; then
+	aviso_p "$p - Ok"
+	disp=$( echo "$disp $p")
+	else
+	aviso_p "$p - Fail"
+	fi
+done
+return
+}
+
+
+function dropbear(){
+verif
+titulo "Dropbear"
+if [[ $drop == "Off" ]]; then
+echo "Ingrese los puertos a activar (ej: 80 443 90)"
+read puertos
+	if [[ -z $puertos ]]; then
+	puertos=443
+	fi
+echo "---------------------------------------------"
+echo -e "Instalando dropbear..\n"
+verif2 "$puertos"
+	if [[ ! "$disp" == "0" ]]; then
+	{
+	sudo apt-get update
+	sudo apt-get install dropbear -y
+	sed -i 's/NO_START=1/NO_START=0/g' /etc/default/dropbear
+	cont=1
+	alta='"'
+		for p in ${disp[@]}
+		do
+			if [[ $cont -eq 2 ]]; then
+			sed -i "s/DROPBEAR_PORT=22/DROPBEAR_PORT=$p/g" /etc/default/dropbear
+			elif [[ $cont -ge 3 ]]; then
+			alta=$( echo "${alta}-p $p ")
+			fi
+		((cont++))
+		done
+	comilla='"'
+	sed -i "s/DROPBEAR_EXTRA_ARGS=/DROPBEAR_EXTRA_ARGS=${alta}${comilla}/g" /etc/default/dropbear
+	banner="${comilla}/etc/dropbear/banner${comilla}"
+	sed -i 's/DROPBEAR_BANNER=/DROPBEAR_BANNER=${banner}/g' /etc/default/dropbear
+	echo "/bin/false" >> /etc/shells
+	service ssh restart
+	systemctl restart dropbear
+	} &> /dev/null
+	echo -e "\nOK - Dropbear instalado"
+	echo "dropbear|1" >> $DIR/controles
+	else
+	echo -e "\nFail - Dropbear no instalado"
+	fi
+
+else
+echo -e "Desinstalando dropbear..\n"
+{
+service dropbear stop
+sudo apt-get autoremove --purge dropbear -y
+service ssh restart
+} &> /dev/null
+ctrl=$( cat $DIR/controles | grep -vw "dropbear|1" )
+echo "$ctrl" > $DIR/controles
+echo -e "\nOK - Dropbear desinstalado"
+fi
+aviso2
+return
+}
+
+
+dropbear
+rm -r $aux &> /dev/null
+rm -r $aux2 &> /dev/null

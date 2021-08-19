@@ -1,0 +1,213 @@
+#!/bin/bash
+barra=$( echo -e "\e[0;36m======================================================\e[m" ) #55
+#Direcciones
+DIR="/home/VPS-ARG"
+DIR2="/usr/local/etc/VPS-ARG/"
+ini_auto="${DIR}/.ini_auto"
+aux="${DIR}/.aux"
+aux2="${DIR}/.aux2"
+#Valores
+cel="\e[0;36m"
+ama="\e[1;33m"
+roj="\e[0;31m"
+ver="\e[0;32m"
+fin="\e[m"
+
+function espacio(){
+fila=$1
+col=$(( ( 55 - $2 )/2 ))
+tput cup $fila $col
+return
+}
+
+function titulo(){
+clear
+nl=$( echo -n "$1" | wc -m )
+echo "$barra"
+espacio 1 $nl
+echo -e "${cel}${1}${fin}"
+echo "$barra"
+return
+}
+
+function aviso(){
+tput cuu1
+tput civis
+echo -e "${cel}[!]${fin} ${cel}${1}${fin}"
+read -e enter
+tput cnorm
+return
+}
+
+function aviso2(){
+echo "$barra"
+tput civis
+echo -e "${ama}Enter para continuar${fin}"
+read -e enter
+tput cnorm
+return
+}
+
+function verif(){
+puertos=$( lsof -i -P -n | grep LISTEN | awk -F ":" '{print $2}' | awk -F " " '{print $1}' )
+for p in ${puertos[@]}
+do
+lsof -i -P -n | grep LISTEN | grep -w $p | awk -F " " '{print $1}' > $aux
+nombre=$( head -n 1 $aux )
+        if [[ $nombre == "sshd" ]]; then
+        sshd="On"
+        break
+        else
+        sshd="Off"
+        fi
+done
+echo "$puertos" > $aux2
+return
+}
+
+function aviso_p(){
+echo -e "Puerto: $1"
+return
+}
+
+function verif2(){
+puertos=$1
+puertos=$( echo "$puertos $2" )
+puertos=$( echo "$puertos $3" )
+puertos=$( echo "$puertos $4" )
+disp=0
+for p in ${puertos[@]}
+do
+busq=$( grep -w $p $aux2 )
+lsof -i -P -n | grep LISTEN | grep -w $p | awk -F " " '{print $1}' > $aux
+busq_ssh=$( cat $aux | grep -w "sshd" )
+        if [[ -z $busq ]]; then
+        aviso_p "$p - Ok"
+        disp=$( echo "$disp $p")
+	elif [[ ! -z $busq_ssh ]]; then
+	aviso_p "$p - Ok"
+        disp=$( echo "$disp $p")
+        else
+        aviso_p "$p - Fail"
+        fi
+done
+return
+}
+
+
+
+function refres_ram(){
+titulo "Refrescar RAM"
+echo -e "${ama}Comprobando estado de la memoria${fin}"
+free
+sleep 2
+echo -e "\n${ver}OK${fin} - ${ama}Comprobacion completada${fin}"
+echo -e "${cel}-----------------------------${fin}"
+echo -e "${ama}Deshabilitando SWAP${fin}"
+{
+swapoff -a
+} &> /dev/null
+sleep 3
+tput cuu1 && tput dl1
+echo -e "${ver}OK${fin} - ${ama}SWAP deshabilitada${fin}"
+echo -e "${cel}-----------------------------${fin}"
+echo -e "${ama}Liberando pagecaches, dentries e inodes${fin}"
+{
+sync
+sysctl -w vm.drop_caches=3
+sync
+} &> /dev/null
+sleep 3
+tput cuu1 && tput dl1
+echo -e "${ver}OK${fin} - ${ama}RAM liberada${fin}"
+echo -e "${cel}-----------------------------${fin}"
+echo -e "${ama}Habilitando SWAP${fin}"
+{
+swapon -a
+} &> /dev/null
+sleep 3
+tput cuu1 && tput dl1
+echo -e "${ver}OK${fin} - ${ama}SWAP habilitada${fin}"
+echo -e "${cel}-----------------------------${fin}"
+echo -e "${ama}Estado actual de la RAM${fin}"
+free
+sleep 3
+echo -e "${ama}\n..Proceso finalizado con exito..${fin}"
+aviso2
+return
+}
+
+function mod_ssh(){
+titulo "Modificar puerto SSH"
+verif
+if [[ $sshd == "On" ]]; then
+echo -n -e "${cel}Ingrese los nuevos puertos SSH${fin}: "
+read -e puertos
+        if [[ -z $puertos ]]; then
+        puertos=22
+        fi
+echo -e "${cel}--------------------------------${fin}"
+echo -e "${ama}Reconfigurando OpenSSH..${fin}"
+verif2 ${puertos}
+conf=$( cat "/etc/ssh/sshd_config" | grep -vw "Port" )
+conf1=$( cat "/etc/ssh/sshd_config" )
+echo "$conf1" > ${DIR2}.sshd_config.1
+cont=1
+	for p in ${disp[@]}
+	do
+		if [[ $cont -ge 2 ]]; then
+		echo "Port $p" >> ${DIR2}sshd_config
+		fi
+	((cont++))
+	done
+echo "$conf" >> ${DIR2}sshd_config
+rm -r /etc/ssh/sshd_config.1 &> /dev/null
+mv /etc/ssh/sshd_config /etc/ssh/sshd_config.1
+mv ${DIR2}sshd_config /etc/ssh/sshd_config
+service ssh restart
+tput cuu1 && tput dl1
+tput cuu1 && tput dl1
+echo -e "${ver}OK${fin} - ${ama}OpenSSH configurado${fin}"
+else
+echo -e "${cel}[!]${fin}${roj}OpenSSH no activado${fin}${cel}[!]${fin}"
+fi
+aviso2
+rm -r ${DIR2}sshd_config
+return
+}
+
+function herramientas(){
+titulo "Herramientas"
+echo -e "${cel}[1]${fin} -> ${ama}Refrescar RAM${fin}"
+echo -e "${cel}[2]${fin} -> ${ama}Modificar puerto SSH${fin}"
+echo -e "${cel}[3]${fin} -> ${ama}Speedtest${fin}"
+echo "$barra"
+echo -e "${cel}[0]${fin} -> ${ama}Volver${fin}"
+echo "$barra"
+echo -n -e "${cel}Opcion${fin}: "
+read -e op
+case $op in
+1)
+refres_ram
+;;
+2)
+mod_ssh
+;;
+3)
+cd ${DIR2}
+sudo ./speed
+;;
+0)
+exit
+;;
+*)
+aviso "Opcion invalida"
+;;
+esac
+}
+
+
+while :
+do
+herramientas
+done

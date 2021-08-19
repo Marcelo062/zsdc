@@ -1,0 +1,181 @@
+#!/bin/bash
+barra=$( echo -e "\e[0;36m======================================================\e[m" ) #55
+#Direcciones
+DIR="/home/VPS-ARG"
+DIR2="/usr/local/etc/VPS-ARG/"
+ini_auto="${DIR}/.ini_auto"
+aux="${DIR}/.aux"
+aux2="${DIR}/.aux2"
+#Valores
+cel="\e[0;36m"
+ama="\e[1;33m"
+roj="\e[0;31m"
+ver="\e[0;32m"
+fin="\e[m"
+
+
+function espacio(){
+fila=$1
+col=$(( ( 55 - $2 )/2 ))
+tput cup $fila $col
+return
+}
+
+function estado(){
+std=$( cat ${DIR}/.ini_auto 2> /dev/null )
+if [[ "$std" == "ON" ]]; then
+std=$( echo -e "${ver}ON${fin}" )
+else
+std=$( echo -e "${roj}OFF${fin}" )
+fi
+}
+
+function titulo(){
+clear
+nl=$( echo -n "$1" | wc -m )
+echo "$barra"
+espacio 1 $nl
+echo -e "${ama}$1${fin}"
+echo "$barra"
+return
+}
+
+function aviso(){
+tput cuu1
+tput civis
+echo -n -e "${cel}[!]${fin} ${ama}$1${fin}"
+read -e enter
+tput cnorm
+return
+}
+
+function aviso2(){
+echo "$barra"
+tput civis
+echo -n -e "${ama}Enter para continuar${fin}"
+read -e enter
+tput cnorm
+return
+}
+
+function cpumem(){
+#Uso de CPU
+nnucleo=$( lscpu | grep -w "CPU(s):" | awk -F "N" '{print $1}' | awk '{print $2}')
+cfree=$( top -bn1 | awk '/Cpu/' | awk '{print $8}' )
+cfree=${cfree%.*}
+cused=$(( 100 - ${cfree} ))
+#Uso de Memoria
+Mem=$( top -bn1 | awk '/KiB Mem/' | awk -F ":  " '{print $2}' )
+total=$( echo "$Mem" | awk '{print $1}' )
+free=$( echo "$Mem" | awk '{print $3}' )
+#used=1024
+used=$(( (( $total - $free ) * 100)/$total ))
+total=$( bc <<< "scale=2; ${total}/1024" )
+return
+}
+
+function portact(){
+titulo "Puertos Activos"
+{
+puertos=$( lsof -i -P -n | grep LISTEN | awk -F ":" '{print $2}' | awk -F " " '{print $1}' )
+} &> /dev/null
+for p in ${puertos[@]}
+do
+{
+pp=$( grep -w $p $aux2 )
+} &> /dev/null
+if [[ $pp == "" ]]; then
+{
+lsof -i -P -n | grep LISTEN | grep -w $p | awk -F " " '{print $1}' > $aux
+#} &> /dev/null
+nombre=$( head -n 1 $aux )
+#{
+nn=$( grep -w $nombre $aux2 -m 1)
+} &> /dev/null
+{
+	if [[ $nn == "" ]]; then
+	echo -e "${cel}$nombre${fin}: ${ama}$p${fin}"
+	ant=$( cat $aux2 2> /dev/null )
+	echo -e "$nombre: $p" > $aux2
+	echo -e "$ant" >> $aux2
+	else
+	tput cuu1
+	echo -e "${cel}${nn}${fin}, ${cel}${p}${fin}"
+	ant=$( cat $aux2 2> /dev/null )
+        echo -e "${nn}, $p" > $aux2
+        echo -e "$ant" >> $aux2
+	fi
+} 2> /dev/null
+fi
+done
+rm "$aux" &> /dev/null
+rm "$aux2" &> /dev/null
+aviso2
+return
+}
+
+function auto_s(){
+if [[ $( cat $ini_auto ) == "OFF" ]]; then
+echo "cd ${DIR2}" >> "/etc/bash.bashrc"
+echo "sudo ./s" >> "/etc/bash.bashrc"
+echo "ON" > $ini_auto
+else
+conf=$( cat /etc/bash.bashrc | grep -vw "cd ${DIR2}" )
+echo "$conf" > /etc/bash.bashrc
+conf=$( cat /etc/bash.bashrc | grep -vw "sudo ./s" )
+echo "$conf" > /etc/bash.bashrc
+echo "OFF" > $ini_auto
+fi
+return
+}
+
+function menu(){
+titulo "Menu Principal"
+cpumem
+estado
+echo -e -n "  ${cel}CPU${fin}   | ${cel}Total${fin}: ${ama}$nnucleo${fin} " ; tput cup 3 27; echo -e "${cel}Usado${fin}: ${ama}${cused}%${fin}"
+echo -e -n "  ${cel}RAM${fin}   | ${cel}Total${fin}: ${ama}${total}Mb${fin}"; tput cup 4 27; echo -e "${cel}Usada${fin}: ${ama}${used}%${fin}"
+echo "$barra"
+echo -e "${cel}[1]${fin} -> ${ama}Administrar usuarios${fin}"
+echo -e "${cel}[2]${fin} -> ${ama}Administrar pagos${fin}"
+echo -e "${cel}[3]${fin} -> ${ama}Conexiones${fin}"
+echo -e "${cel}[4]${fin} -> ${ama}Puertos activos${fin}"
+echo -e "${cel}[5]${fin} -> ${ama}Herramientas${fin}"
+echo -e "${cel}[6]${fin} -> ${ama}Auto inicar script [${fin} ${std} ${ama}]${fin}"
+echo "$barra"
+echo -e "${cel}[0]${fin} -> ${ama}Salir${fin}"
+echo "$barra"
+echo -e -n "${cel}Opcion${fin}: "
+read -e op
+case $op in
+1)
+cd $DIR2
+sudo ./au;;
+2)
+cd $DIR2
+sudo ./ap;;
+#sudo ./"${DIR2}ap";;
+3)
+cd $DIR2
+sudo ./c;;
+4)
+portact;;
+5)
+cd $DIR2
+sudo ./h;;
+6)
+auto_s;;
+0)
+clear
+exit;;
+*)
+aviso "Opcion invalida";;
+esac
+return
+}
+
+
+while :
+do
+menu
+done

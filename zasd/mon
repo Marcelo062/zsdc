@@ -1,0 +1,144 @@
+#!/bin/bash
+barra=$( echo -e "\e[0;36m======================================================\e[m" ) #55
+#Direcciones
+DIR="/home/VPS-ARG"
+aux="${DIR}/.aux"
+aux2="${DIR}/.aux2"
+#Valores
+cel="\e[0;36m"
+ama="\e[1;33m"
+roj="\e[0;31m"
+ver="\e[0;32m"
+fin="\e[m"
+rm -r $aux &> /dev/null
+conet=0
+
+function espacio(){
+fila=$1
+col=$(( ( 55 - $2 )/2 ))
+tput cup $fila $col
+return
+}
+
+function espacio_l(){
+tam=$( echo -n "$1" | wc -m )
+fila=$2
+col=$(( ( $3 - $tam )/2 ))
+col=$(( $col + $4 ))
+tput cup $fila $col
+return
+}
+
+function titulo(){
+clear
+nl=$( echo -n "$1" | wc -m )
+echo "$barra"
+espacio 1 $nl
+echo -e "${ama}${1}${fin}"
+echo "$barra"
+return
+}
+
+function aviso2(){
+echo "$barra"
+tput civis
+echo -e "${ama}Enter para continuar${fin}"
+read -e enter
+tput cnorm
+return
+}
+
+function estado(){
+if [[ -z $1 ]]; then
+est="${roj}OFF${fin}"
+ON=0
+else
+est="${ver}ON${fin}"
+conet=$(( $conet + $ON ))
+fi
+}
+
+data=( `ps aux | grep -i dropbear | awk '{print $2}'`);
+
+titulo "Monitor de Conexiones"
+for PID in "${data[@]}"
+do
+	NUM=`cat /var/log/auth.log | grep -i dropbear | grep -i "Password auth succeeded" | grep "dropbear\[$PID\]" | wc -l`;
+	USER=`cat /var/log/auth.log | grep -i dropbear | grep -i "Password auth succeeded" | grep "dropbear\[$PID\]" | awk '{print $10}'`;
+	IP=`cat /var/log/auth.log | grep -i dropbear | grep -i "Password auth succeeded" | grep "dropbear\[$PID\]" | awk '{print $12}'`;
+	if [ $NUM -eq 1 ]; then
+	USER=$( echo -e "${USER:1}" )
+	USER=`echo "$USER" | sed 's/.$//g'`
+	nombre=$( grep -w $USER $DIR/usuarios | awk -F "|" '{print $1}' )
+                if [[ ! -z $nombre ]]; then
+		lim=$( grep -w $USER $DIR/usuarios | awk -F "|" '{print $3}' )
+		verif=$( grep -w $nombre $aux 2> /dev/null )
+			if [[ -z $verif ]]; then
+			echo -e "${nombre}|1|$lim" >> $aux
+			else
+			cont=$( echo -e "$verif" | awk -F "|" '{print $2}' )
+			((cont++))
+			rem=$( grep -vw $verif $aux 2> /dev/null)
+			echo -e "$rem" > $aux
+			echo -e "${nombre}|${cont}|$lim" >> $aux
+			fi
+		fi
+	fi
+done
+
+data=( `ps aux | grep "\[priv\]" | sort -k 72 | awk '{print $2}'`);
+
+for PID in "${data[@]}"
+do
+	NUM=`cat /var/log/auth.log | grep -i sshd | grep -i "Accepted password for" | grep "sshd\[$PID\]" | wc -l`;
+	USER=`cat /var/log/auth.log | grep -i sshd | grep -i "Accepted password for" | grep "sshd\[$PID\]" | awk '{print $9}'`;
+	IP=`cat /var/log/auth.log | grep -i sshd | grep -i "Accepted password for" | grep "sshd\[$PID\]" | awk '{print $11}'`;
+        if [ $NUM -eq 1 ]; then
+	nombre=$( grep -w $USER $DIR/usuarios | awk -F "|" '{print $1}')
+		if [[ ! -z $nombre ]]; then
+		lim=$( grep -w $USER $DIR/usuarios | awk -F "|" '{print $3}' )
+	        verif=$( grep -w $nombre $aux 2> /dev/null )
+	                if [[ -z $verif ]]; then
+	                echo -e "${nombre}|1|$lim" >> $aux
+	                else
+	                cont=$( echo -e "$verif" | awk -F "|" '{print $2}' )
+	                ((cont++))
+	                rem=$( grep -vw $verif $aux 2> /dev/null)
+	                echo -e "$rem" > $aux
+	                echo -e "${nombre}|${cont}|$lim" >> $aux
+        	        fi
+		fi
+        fi
+done
+
+espacio_l "USUARIO" 3 20 0
+echo -e "${ama}USUARIO"
+espacio_l "CONEXIONES" 3 8 22
+echo -e "CONEXIONES"
+espacio_l "ESTADO" 3 4 38
+echo -e "ESTADO${fin}"
+echo -e "${cel}-----------------------------------------------------${fin}"
+linea=5
+{
+sort ${DIR}/usuarios > $aux2
+} &> /dev/null
+while IFS= read -r line
+do
+	nombre=$( echo -e "$line" |  awk -F "|" '{print $1}' )
+        ON=$( grep -w $nombre $aux 2> /dev/null | awk -F "|" '{print $2}' )
+	estado "$ON"
+	lim=$( echo -e "$line" |  awk -F "|" '{print $3}' )
+        tput cup $linea 0
+        echo -e "${ama}$nombre${fin}"
+        espacio_l "${ON}/${lim}" $linea 8 22
+        echo -e "${ama}${ON}/${lim}${fin}"
+        espacio_l "$est" $linea 4 44
+#aqui
+        echo -e "$est"
+        ((linea++))
+done < $aux2
+rm -r $aux2 &> /dev/null
+rm -r $aux &> /dev/null
+echo -e "$barra"
+echo -e "${cel}Conectados${fin}=${ama} ${conet}${fin}"
+aviso2

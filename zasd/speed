@@ -1,0 +1,62 @@
+#!/bin/bash
+barra=$( echo -e "\e[0;36m======================================================\e[m" ) #55
+#Direcciones
+DIR="/home/VPS-ARG"
+ini_auto="${DIR}/.ini_auto"
+aux="${DIR}/.aux"
+aux2="${DIR}/.aux2"
+#Valores
+cel="\e[0;36m"
+ama="\e[1;33m"
+roj="\e[0;31m"
+ver="\e[0;32m"
+fin="\e[m"
+
+function espacio(){
+fila=$1
+col=$(( ( 55 - $2 )/2 ))
+tput cup $fila $col
+return
+}
+
+function titulo(){
+clear
+nl=$( echo -n "$1" | wc -m )
+echo "$barra"
+espacio 1 $nl
+echo -e "${ama}$1${fin}"
+echo "$barra"
+return
+}
+
+function aviso2(){
+echo "$barra"
+tput civis
+echo -n -e "${ama}Enter para continuar${fin}"
+read -e enter
+tput cnorm
+return
+}
+
+function speed(){
+titulo "SpeedTest"
+tput civis
+{
+info=$( grep -w "speed|1" ${DIR}/controles )
+if [[ -z $info ]]; then
+( echo "YES" ) | speedtest
+echo "speed|1" >> ${DIR}/controles
+tput cuu1 && tput el
+fi
+} &> /dev/null
+echo -e "${ama}"
+tput cuu1 && tput el
+speedtest -p
+echo -e "${fin}"
+tput cuu1 && tput el
+tput cuu1 && tput el
+aviso2
+return
+}
+
+speed
